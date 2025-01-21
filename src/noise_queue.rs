@@ -178,7 +178,7 @@ pub(crate) fn prepare_compute_noise_buffers(
                 .collect(),
             shader: shaders.add(
                 Shader::from_wgsl(
-                    generate_noise_shader(item), 
+                    generate_noise_shader(sizes[0].into(), item), 
                     format!("compute_noise_{}.wgsl", item.key_id())
                 )
             ),

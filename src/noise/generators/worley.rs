@@ -47,18 +47,20 @@ impl ComputeNoise for Worley {
 
 impl ComputeNoiseType for Worley {
     fn shader() -> ShaderRef {
-        "embedded://bevy_compute_noise/noise/generators/shaders/worley_2d.wgsl".into()
+        "embedded://bevy_compute_noise/noise/generators/shaders/worley.wgsl".into()
     }
 
     fn embed_shaders(app: &mut App) {
-        embedded_asset!(app, "shaders/worley_2d.wgsl");
-        embedded_asset!(app, "shaders/worley_3d.wgsl");
+        embedded_asset!(app, "shaders/worley.wgsl");
     }
 }
 
 impl ComputeNoiseShader for Worley {
-    fn function_name() -> &'static str {
+    fn function_2d() -> &'static str {
         "worley_2d"
+    }
+    fn function_3d() -> &'static str {
+        "worley_3d"
     }
 
     fn import_path() -> &'static str {

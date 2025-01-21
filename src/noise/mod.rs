@@ -42,7 +42,8 @@ pub struct ErasedComputeNoise {
     pub type_id: TypeId,
 
     pub struct_name: Option<&'static str>,
-    pub function_name: &'static str,
+    pub function_2d: &'static str,
+    pub function_3d: &'static str,
     pub import_path: &'static str,
 }
 
@@ -68,7 +69,8 @@ impl<T: ComputeNoise> From<T> for ErasedComputeNoise {
             type_id: TypeId::of::<T>(),
 
             struct_name: T::struct_name(),
-            function_name: T::function_name(),
+            function_2d: T::function_2d(),
+            function_3d: T::function_3d(),
             import_path: T::import_path(),
         }
     }

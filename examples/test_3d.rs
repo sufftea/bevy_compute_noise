@@ -29,21 +29,30 @@ fn setup(
     });
     let handle = images.add(image);
 
-    noise_queue.queue(
-        handle.clone(),
-        Fbm::<Perlin> {
-            noise: Perlin {
-                seed: 1,
-                frequency: 5.0,
-                // flags: (WorleyFlags::INVERT | WorleyFlags::TILEABLE).bits()
-                flags: (PerlinFlags::default() | PerlinFlags::TILEABLE).bits()
-            },
-            octaves: 4,
-            lacunarity: 2.0,
-            persistence: 0.5,
+    // noise_queue.queue(
+    //     handle.clone(),
+    //     Fbm::<Perlin> {
+    //         noise: Perlin {
+    //             seed: 1,
+    //             frequency: 5.0,
+    //             // flags: (WorleyFlags::INVERT | WorleyFlags::TILEABLE).bits()
+    //             flags: (PerlinFlags::default() | PerlinFlags::TILEABLE).bits()
+    //         },
+    //         octaves: 4,
+    //         lacunarity: 2.0,
+    //         persistence: 0.5,
+    //         ..default()
+    //     },
+    // );
+
+    noise_queue.queue(handle.clone(), (
+        Worley {
+            flags: WorleyFlags::TILEABLE.bits(),
             ..default()
         },
-    );
+        Invert,
+        // Store(Channel::R)
+    ));
 
     let mut quad = Rectangle::default().mesh().build();
     if let Some(uvs) = quad.attribute_mut(Mesh::ATTRIBUTE_UV_0) {

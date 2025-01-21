@@ -54,7 +54,10 @@ impl<T: ComputeNoiseType> Default for Fbm<T> {
 }
 
 impl<T: ComputeNoiseType> ComputeNoiseShader for Fbm<T> {
-    fn function_name() -> &'static str {
+    fn function_2d() -> &'static str {
+        "fbm"
+    }
+    fn function_3d() -> &'static str {
         "fbm"
     }
 

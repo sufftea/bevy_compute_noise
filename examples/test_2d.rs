@@ -47,13 +47,13 @@ fn setup(
 
 
     let mut quad = Rectangle::default().mesh().build();
-    // if let Some(uvs) = quad.attribute_mut(Mesh::ATTRIBUTE_UV_0) {
-    //     if let VertexAttributeValues::Float32x2(uvs) = uvs {
-    //         for uv in uvs.iter_mut() {
-    //             *uv = [uv[0] * 2.0, uv[1] * 2.0];
-    //         }
-    //     }
-    // }
+    if let Some(uvs) = quad.attribute_mut(Mesh::ATTRIBUTE_UV_0) {
+        if let VertexAttributeValues::Float32x2(uvs) = uvs {
+            for uv in uvs.iter_mut() {
+                *uv = [uv[0] * 2.0, uv[1] * 2.0];
+            }
+        }
+    }
 
     // noise_queue.queue(handle.clone(), (
     //     Fbm::<Perlin> {
@@ -69,7 +69,7 @@ fn setup(
     // ));
 
     noise_queue.queue(handle.clone(), (
-        Perlin::default(),
+        Worley::default(),
         Invert,
         // Store(Channel::R)
     ));
@@ -94,23 +94,17 @@ fn setup(
 //     materials: Res<Assets<ImageMaterial>>,
 // ) {
 //     if keys.just_pressed(KeyCode::Space) { 
-//         *local = *local + 1;
-//     }
-//     for material in query.iter() {
-//         noise_queue.generate(
-//             materials.get(&material.0).unwrap().image.clone(),
-//             Fbm::<Worley> {
-//                 noise: Worley {
+//         for material in query.iter() {
+//             noise_queue.queue(
+//                 materials.get(&material.0).unwrap().image.clone(),
+//                 Worley {
 //                     seed: *local,
 //                     frequency: 5.0,
 //                     flags: WorleyFlags::TILEABLE.bits(),
-//                     // flags: (PerlinFlags::default() | PerlinFlags::TILEABLE).bits()
-//                 },
-//                 octaves: 4,
-//                 lacunarity: 2.0,
-//                 persistence: 0.5,
-//             }.into(),
-//         );
+//                 }
+//             );
+//         }
+//         *local = *local + 1;
 //     }
 // }
 

@@ -55,18 +55,20 @@ impl ComputeNoise for Perlin {
 
 impl ComputeNoiseType for Perlin {
     fn shader() -> ShaderRef {
-        "embedded://bevy_compute_noise/noise/generators/shaders/perlin_2d.wgsl".into()
+        "embedded://bevy_compute_noise/noise/generators/shaders/perlin.wgsl".into()
     }
 
     fn embed_shaders(app: &mut App) {
-        embedded_asset!(app, "shaders/perlin_2d.wgsl");
-        embedded_asset!(app, "shaders/perlin_3d.wgsl");
+        embedded_asset!(app, "shaders/perlin.wgsl");
     }
 }
 
 impl ComputeNoiseShader for Perlin {
-    fn function_name() -> &'static str {
+    fn function_2d() -> &'static str {
         "perlin_2d"
+    }
+    fn function_3d() -> &'static str {
+        "perlin_3d"
     }
 
     fn import_path() -> &'static str {

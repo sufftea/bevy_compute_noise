@@ -1,139 +1,183 @@
-use std::borrow::Cow;
+use bevy::{asset::Handle, render::render_resource::TextureDimension, utils::hashbrown::HashSet};
 
-use bevy::{asset::Handle, render::render_resource::ShaderSource, utils::hashbrown::HashSet};
-
-use crate::{noise::ComputeNoise, noise_queue::{ComputeNoiseSequence, IntoNoiseSequence}, prelude::{Invert, Perlin}, render::pipeline::NoiseOp};
+use crate::{noise::ComputeNoise, noise_queue::{ComputeNoiseInstruction, ComputeNoiseSequence, IntoNoiseSequence}, prelude::{Invert, Perlin}, render::pipeline::NoiseOp};
 
 pub trait ComputeNoiseShader {
     fn import_path() -> &'static str;
     fn struct_name() -> Option<&'static str>;
-    fn function_name() -> &'static str;
+    fn function_2d() -> &'static str;
+    fn function_3d() -> &'static str;
 }
 
-pub(crate) fn generate_noise_shader(sequence: &ComputeNoiseSequence) -> String {
-    let mut shader = String::new();
-    add_imports(&mut shader, sequence);
-    add_bindings(&mut shader, sequence);
-    add_main(&mut shader, sequence);
-    println!("{}", &shader);
-
-    shader
+struct ComputeNoiseShaderBuilder {
+    shader: String,
+    binding_index: usize,
+    dimension: TextureDimension,
 }
 
-fn add_imports(shader: &mut String, sequence: &ComputeNoiseSequence) {
-    let mut imports = HashSet::new();
+impl ComputeNoiseShaderBuilder {
+    fn new(dimension: TextureDimension) -> Self {
+        Self {
+            shader: String::new(),
+            binding_index: 1,
+            dimension,
+        }
+    }
 
-    for instruction in &sequence.instructions {
-        if imports.insert(instruction.noise.type_id) {
+    fn add_imports(mut self, sequence: &ComputeNoiseSequence) -> Self {
+        let mut imports = HashSet::new();
+        
+        for instruction in &sequence.instructions {
+            if imports.insert(instruction.noise.type_id) {
+                let fn_name = match self.dimension {
+                    TextureDimension::D2 => instruction.noise.function_2d,
+                    TextureDimension::D3 => instruction.noise.function_3d,
+                    _ => unreachable!(),
+                };
+
+                if let Some(struct_name) = instruction.noise.struct_name {
+                    self.shader.push_str(&format!(
+                        "#import {}::{{{}, {}}}\n",
+                        instruction.noise.import_path,
+                        struct_name,
+                        fn_name,
+                    ));
+                } else {
+                    self.shader.push_str(&format!(
+                        "#import {}::{}\n",
+                        instruction.noise.import_path,
+                        fn_name,
+                    ));
+                }
+            }
+        }
+        self.shader.push('\n');
+        self
+    }
+
+    fn add_bindings(mut self, sequence: &ComputeNoiseSequence) -> Self {
+        let dim = match self.dimension {
+            TextureDimension::D2 => "2d",
+            TextureDimension::D3 => "3d",
+            _ => unreachable!("Only 2D and 3D textures are supported"),
+        };
+
+        self.shader.push_str(&format!(
+            "@group(0) @binding(0) var output_texture: texture_storage_{}<rgba8unorm, read_write>;\n",
+            dim,
+        ));
+
+        for instruction in &sequence.instructions {
+            if instruction.images.len() > 1 {
+                for _ in 1..instruction.images.len() {
+                    self.shader.push_str(&format!(
+                        "@group(0) @binding({}) var input_texture{}: texture_storage_{}<rgba8unorm, read_write>;\n",
+                        self.binding_index,
+                        self.binding_index,
+                        dim,
+                    ));
+                    self.binding_index += 1;
+                }
+            }
+
             if let Some(struct_name) = instruction.noise.struct_name {
-                shader.push_str(&format!(
-                    "#import {}::{{{}, {}}}\n",
-                    instruction.noise.import_path,
+                self.shader.push_str(&format!(
+                    "@group(0) @binding({}) var<uniform> {}{}: {};\n",
+                    self.binding_index,
+                    struct_name.to_lowercase(),
+                    self.binding_index,
                     struct_name,
-                    instruction.noise.function_name
                 ));
-            } else {
-                shader.push_str(&format!(
-                    "#import {}::{}\n",
-                    instruction.noise.import_path,
-                    instruction.noise.function_name
-                ));
+                self.binding_index += 1;
             }
         }
+        self
     }
-    shader.push('\n');
-}
 
-fn add_bindings(shader: &mut String, sequence: &ComputeNoiseSequence) {
-    shader.push_str(
-        "@group(0) @binding(0) var output_texture: texture_storage_2d<rgba8unorm, read_write>;\n"
-    );
+    fn add_main(mut self, sequence: &ComputeNoiseSequence) -> Self {
+        self.binding_index = 1;
 
-    let mut binding_index = 1;
-    for instruction in &sequence.instructions {
-        if instruction.images.len() > 1 {
-            for _ in 1..instruction.images.len() {
-                shader.push_str(&format!(
-                    "@group(0) @binding({}) var input_texture{}: texture_storage_2d<rgba8unorm, read_write>;\n",
-                    binding_index,
-                    binding_index,
-                ));
-                binding_index += 1;
-            }
-        }
+        let (workgroup, coords, vec_type) = match self.dimension {
+            TextureDimension::D2 => ("32, 32", "xy", "vec2"),
+            TextureDimension::D3 => ("8, 8, 8", "xyz", "vec3"),
+            _ => unreachable!("Only 2D and 3D textures are supported"),
+        };
 
-        if let Some(struct_name) = instruction.noise.struct_name {
-            shader.push_str(&format!(
-                "@group(0) @binding({}) var<uniform> {}{}: {};\n",
-                binding_index,
-                struct_name.to_lowercase(),
-                binding_index,
-                struct_name,
-            ));
-            binding_index += 1;
-        }
-    }
-}
-
-fn add_main(shader: &mut String, sequence: &ComputeNoiseSequence) {
-    shader.push_str(
+        self.shader.push_str(&format!(
 "
-@compute @workgroup_size(32, 32)
-fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let coords = invocation_id.xy;
+@compute @workgroup_size({})
+fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {{
+    let coords = invocation_id.{};
     let texture_size = textureDimensions(output_texture);
-    let uv = vec2<f32>(coords) / vec2<f32>(texture_size);
-    var value: f32;\n
-");
+    let uv = {}<f32>(coords) / {}<f32>(texture_size);
+    var value: f32;
+",
+            workgroup, coords, vec_type, vec_type
+        ));
 
-    let mut binding_index = 1;
-    for instruction in &sequence.instructions {
+        for instruction in &sequence.instructions {
+            self.add_instruction(instruction);
+        }
+
+        self.shader.push_str("    textureStore(output_texture, coords, vec4<f32>(value, 0.0, 0.0, 0.0));\n}");
+        self
+    }
+
+    fn add_instruction(&mut self, instruction: &ComputeNoiseInstruction) -> &mut Self {
+        let fn_name = match self.dimension {
+            TextureDimension::D2 => instruction.noise.function_2d,
+            TextureDimension::D3 => instruction.noise.function_3d,
+            _ => unreachable!("Only 2D and 3D textures are supported"),
+        };
+
         match instruction.op {
             NoiseOp::Generator => {
                 if let Some(struct_name) = instruction.noise.struct_name {
-                    shader.push_str(&format!(
+                    self.shader.push_str(&format!(
                         "    value = {}(uv, {}{});\n",
-                        instruction.noise.function_name,
+                        fn_name,
                         struct_name.to_lowercase(),
-                        binding_index
+                        self.binding_index
                     ));
-                    binding_index += 1;
+                    self.binding_index += 1;
                 } else {
-                    shader.push_str(&format!(
+                    self.shader.push_str(&format!(
                         "    value = {}(uv);\n",
-                        instruction.noise.function_name
+                        fn_name
                     ));
                 }
             }
             NoiseOp::Modifier => {
                 if instruction.images.len() > 1 {
-                    shader.push_str(&format!(
-"
-    let input_size{0} = textureDimensions(input_texture{0});
-    let input_coords{0} = vec2<u32>(vec2<f32>(coords) * vec2<f32>(input_size{0}) / vec2<f32>(texture_size));
-    value = {1}(textureLoad(input_texture{0}, input_coords{0}).r);
-",
-                        binding_index,
-                        instruction.noise.function_name,
+                    self.shader.push_str(&format!(
+                        "\n    let input_size{0} = textureDimensions(input_texture{0});\n    let input_coords{0} = vec2<u32>(vec2<f32>(coords) * vec2<f32>(input_size{0}) / vec2<f32>(texture_size));\n    value = {1}(textureLoad(input_texture{0}, input_coords{0}).r);\n",
+                        self.binding_index,
+                        fn_name
                     ));
-                    binding_index += 1;
+                    self.binding_index += 1;
                 } else {
-                    shader.push_str(&format!(
+                    self.shader.push_str(&format!(
                         "    value = {}(value);\n",
-                        instruction.noise.function_name
+                        fn_name
                     ));
                 }
             },
             _ => {},
         }
-        
-        // Update binding index for input textures
-        if instruction.images.len() > 1 {
-            binding_index += instruction.images.len() - 1;
-        }
+        self
     }
 
-    shader.push_str("    textureStore(output_texture, coords, vec4<f32>(value, 0.0, 0.0, 0.0));\n}")
+    fn build(self) -> String {
+        self.shader
+    }
+}
+
+pub(crate) fn generate_noise_shader(dimension: TextureDimension, sequence: &ComputeNoiseSequence) -> String {
+    ComputeNoiseShaderBuilder::new(dimension)
+        .add_imports(sequence)
+        .add_bindings(sequence)
+        .add_main(sequence)
+        .build()
 }
 
 #[test]
@@ -143,5 +187,5 @@ fn test() {
         Invert.input_image(Handle::default()),
     ).into_sequence(Handle::default());
 
-    generate_noise_shader(&sequence);
+    generate_noise_shader(TextureDimension::D2, &sequence);
 }

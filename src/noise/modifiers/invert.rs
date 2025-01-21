@@ -27,7 +27,10 @@ impl ComputeNoiseType for Invert {
 }
 
 impl ComputeNoiseShader for Invert {
-    fn function_name() -> &'static str {
+    fn function_2d() -> &'static str {
+        "invert"
+    }
+    fn function_3d() -> &'static str {
         "invert"
     }
 

@@ -9,7 +9,7 @@ use bevy::{
 };
 
 use crate::{
-    noise_queue::{ComputeNoiseRenderQueue, ComputeNoiseResource, ComputeNoiseResourceQueue, RenderComputeNoise}, render::pipeline::ComputeNoisePipeline
+    image::ComputeNoiseSize, noise_queue::{ComputeNoiseRenderQueue, ComputeNoiseResource, ComputeNoiseResourceQueue, RenderComputeNoise}, render::pipeline::ComputeNoisePipeline
 };
 
 pub fn prepare_render_noise(
@@ -68,19 +68,12 @@ pub fn create_bind_group_layout(
         if pipeline.layouts.contains_key(&sequence.key) { continue; }
 
         let mut entries = Vec::new();
-        
-        entries.push(BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::ReadWrite,
-                format: TextureFormat::Rgba8Unorm,
-                view_dimension: TextureViewDimension::D2,
-            },
-            count: None,
-        });
+        let view_dimension = match sequence.size {
+            ComputeNoiseSize::D2(_, _) => TextureViewDimension::D2,
+            ComputeNoiseSize::D3(_, _, _) => TextureViewDimension::D3,
+        };
 
-        for binding in 1..sequence.resources.len() {
+        for binding in 0..sequence.resources.len() {
             match sequence.resources[binding] {
                 ComputeNoiseResource::Image(_) => {
                     entries.push(BindGroupLayoutEntry {
@@ -89,7 +82,7 @@ pub fn create_bind_group_layout(
                         ty: BindingType::StorageTexture {
                             access: StorageTextureAccess::ReadWrite,
                             format: TextureFormat::Rgba8Unorm,
-                            view_dimension: TextureViewDimension::D2,
+                            view_dimension,
                         },
                         count: None,
                     });
@@ -108,8 +101,6 @@ pub fn create_bind_group_layout(
                 },
             }
         }
-
-        dbg!(&entries);
 
         let layout = render_device.create_bind_group_layout(
             Some("compute_noise_bind_group_layout"),
