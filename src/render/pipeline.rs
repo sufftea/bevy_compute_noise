@@ -1,190 +1,151 @@
-use std::any::TypeId;
 
-use bevy::{prelude::*, render::{render_resource::{binding_types::{texture_storage_2d, uniform_buffer_sized}, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntryBuilder, BindingType, ComputePipelineDescriptor, IntoBindGroupLayoutEntryBuilder, ShaderDefVal, ShaderRef, ShaderStages, SpecializedComputePipeline, StorageTextureAccess, TextureDimension, TextureFormat, TextureViewDimension}, renderer::RenderDevice}, utils::HashMap};
+use bevy::{prelude::*, render::{render_resource::{binding_types::{texture_storage_2d, uniform_buffer_sized}, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntryBuilder, BindingType, ComputePipelineDescriptor, IntoBindGroupLayoutEntryBuilder, ShaderDefVal, ShaderRef, ShaderStages, SpecializedComputePipeline, StorageTextureAccess, TextureDimension, TextureFormat, TextureViewDimension}, renderer::RenderDevice}, utils::{hashbrown::HashSet, HashMap}};
 
-use crate::noise::{generators::{ComputeNoiseGenerator, Fbm}, modifiers::ComputeNoiseModifier};
+use crate::noise::{generators::Fbm, ComputeNoiseType};
 
-pub fn load_generator_shader<T: ComputeNoiseGenerator>(world: &mut World) {
-    let shader_2d = match T::shader_2d() {
-        ShaderRef::Default => None,
-        ShaderRef::Handle(handle) => Some(handle),
-        ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
-    }.unwrap();
+// pub fn load_generator_shader<T: ComputeNoiseGenerator>(world: &mut World) {
+//     let shader_2d = match T::shader_2d() {
+//         ShaderRef::Default => None,
+//         ShaderRef::Handle(handle) => Some(handle),
+//         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
+//     }.unwrap();
 
-    let shader_3d = match T::shader_3d() {
-        ShaderRef::Default => None,
-        ShaderRef::Handle(handle) => Some(handle),
-        ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
-    }.unwrap();
+//     let shader_3d = match T::shader_3d() {
+//         ShaderRef::Default => None,
+//         ShaderRef::Handle(handle) => Some(handle),
+//         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
+//     }.unwrap();
 
-    let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
+//     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
 
-    pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D2,
-            op: NoiseOp::Generator,
-        },
-        shader_2d,
-    );
+//     pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D2,
+//             op: NoiseOp::Generator,
+//         },
+//         shader_2d,
+//     );
 
-    pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D3,
-            op: NoiseOp::Generator,
-        },
-        shader_3d,
-    );
-}
+//     pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D3,
+//             op: NoiseOp::Generator,
+//         },
+//         shader_3d,
+//     );
+// }
 
-pub fn load_fbm_shaders<T: ComputeNoiseGenerator>(world: &mut World) {
-    let shader = world.resource::<AssetServer>().load("embedded://bevy_compute_noise/noise/generators/shaders/fbm.wgsl");
-    let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
+// pub fn load_fbm_shaders<T: ComputeNoiseGenerator>(world: &mut World) {
+//     let shader = world.resource::<AssetServer>().load("embedded://bevy_compute_noise/noise/generators/shaders/fbm.wgsl");
+//     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
 
-    pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<Fbm<T>>(),
-            dimension: TextureDimension::D2,
-            op: NoiseOp::Generator,
-        },
-        shader.clone(),
-    );
+//     pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<Fbm<T>>(),
+//             dimension: TextureDimension::D2,
+//             op: NoiseOp::Generator,
+//         },
+//         shader.clone(),
+//     );
 
-    pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<Fbm<T>>(),
-            dimension: TextureDimension::D3,
-            op: NoiseOp::Generator,
-        },
-        shader,
-    );
+//     pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<Fbm<T>>(),
+//             dimension: TextureDimension::D3,
+//             op: NoiseOp::Generator,
+//         },
+//         shader,
+//     );
 
-    pipeline.shader_defs.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<Fbm<T>>(),
-            dimension: TextureDimension::D2,
-            op: NoiseOp::Generator,
-        },
-        vec![T::shader_def(), "2D".into()]
-    );
-    pipeline.shader_defs.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<Fbm<T>>(),
-            dimension: TextureDimension::D3,
-            op: NoiseOp::Generator,
-        },
-        vec![T::shader_def(), "3D".into()]
-    );
-}
+//     pipeline.shader_defs.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<Fbm<T>>(),
+//             dimension: TextureDimension::D2,
+//             op: NoiseOp::Generator,
+//         },
+//         vec![T::shader_def(), "2D".into()]
+//     );
+//     pipeline.shader_defs.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<Fbm<T>>(),
+//             dimension: TextureDimension::D3,
+//             op: NoiseOp::Generator,
+//         },
+//         vec![T::shader_def(), "3D".into()]
+//     );
+// }
 
-pub fn load_modifier_shader<T: ComputeNoiseModifier>(world: &mut World) {
+// pub fn load_modifier_shader<T: ComputeNoiseModifier>(world: &mut World) {
+//     let shader = match T::shader() {
+//         ShaderRef::Default => None,
+//         ShaderRef::Handle(handle) => Some(handle),
+//         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
+//     }.unwrap();
+ 
+//     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
+//      pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D2,
+//             op: NoiseOp::Modifier,
+//         },
+//         shader.clone(),
+//     );
+
+//     pipeline.shaders.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D3,
+//             op: NoiseOp::Modifier,
+//         },
+//         shader,
+//     );
+
+//     pipeline.shader_defs.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D2,
+//             op: NoiseOp::Modifier,
+//         },
+//         vec!["2D".into()]
+//     );
+//     pipeline.shader_defs.insert(
+//         ComputeNoisePipelineKey {
+//             type_id: TypeId::of::<T>(),
+//             dimension: TextureDimension::D3,
+//             op: NoiseOp::Modifier,
+//         },
+//         vec!["3D".into()]
+//     );
+// }
+
+pub(crate) fn load_base_shader<T: ComputeNoiseType>(world: &mut World) {
     let shader = match T::shader() {
         ShaderRef::Default => None,
         ShaderRef::Handle(handle) => Some(handle),
         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
-    }.unwrap();
- 
+    }.unwrap(); 
+
     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
-     pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D2,
-            op: NoiseOp::Modifier,
-        },
-        shader.clone(),
-    );
-
-    pipeline.shaders.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D3,
-            op: NoiseOp::Modifier,
-        },
-        shader,
-    );
-
-    pipeline.shader_defs.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D2,
-            op: NoiseOp::Modifier,
-        },
-        vec!["2D".into()]
-    );
-    pipeline.shader_defs.insert(
-        ComputeNoisePipelineKey {
-            type_id: TypeId::of::<T>(),
-            dimension: TextureDimension::D3,
-            op: NoiseOp::Modifier,
-        },
-        vec!["3D".into()]
-    );
+    pipeline.base_shaders.insert(shader);
 }
 
 #[derive(Resource)]
 pub struct ComputeNoisePipeline {
-    pub generator_layout_2d: BindGroupLayout,
-    pub generator_layout_3d: BindGroupLayout,
-    pub modifier_layout_2d: BindGroupLayout,
-    pub modifier_layout_3d: BindGroupLayout,
-    shaders: HashMap<ComputeNoisePipelineKey, Handle<Shader>>,
-    shader_defs: HashMap<ComputeNoisePipelineKey, Vec<ShaderDefVal>>,
+    pub base_shaders: HashSet<Handle<Shader>>,
+    pub layouts: HashMap<ComputeNoisePipelineKey, BindGroupLayout>,
+    pub shaders: HashMap<ComputeNoisePipelineKey, Handle<Shader>>,
     _util_shader: Handle<Shader>,
 }
 
 impl FromWorld for ComputeNoisePipeline {
     fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-
-        let generator_layout_2d = render_device.create_bind_group_layout(
-            "noise_2d_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
-                (
-                    noise_texture_2d(),
-                    uniform_buffer_sized(false, None),
-                )
-            )
-        );
-        let generator_layout_3d = render_device.create_bind_group_layout(
-            "noise_3d_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
-                (
-                    noise_texture_3d(),
-                    uniform_buffer_sized(false, None),
-                )
-            )
-        );
-        let modifier_layout_2d = render_device.create_bind_group_layout(
-            "noise_2d_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
-                (
-                    noise_texture_2d(),
-                    noise_texture_2d(),
-                )
-            )
-        );
-        let modifier_layout_3d = render_device.create_bind_group_layout(
-            "noise_3d_layout",
-            &BindGroupLayoutEntries::sequential(
-                ShaderStages::COMPUTE,
-                (
-                    noise_texture_3d(),
-                    noise_texture_3d(),
-                )
-            )
-        );
-
         Self {
-            generator_layout_2d,
-            generator_layout_3d,
-            modifier_layout_2d,
-            modifier_layout_3d,
+            base_shaders: HashSet::new(),
+            layouts: HashMap::new(),
             shaders: HashMap::new(),
-            shader_defs: HashMap::new(),
             _util_shader: world.resource::<AssetServer>().load("embedded://bevy_compute_noise/noise/shaders/util.wgsl"),
         }
     }
@@ -192,21 +153,14 @@ impl FromWorld for ComputeNoisePipeline {
 
 impl ComputeNoisePipeline {
     pub fn get_layout(&self, key: ComputeNoisePipelineKey) -> &BindGroupLayout {
-        match (key.dimension, key.op) {
-            (TextureDimension::D2, NoiseOp::Generator) => &self.generator_layout_2d,
-            (TextureDimension::D3, NoiseOp::Generator) => &self.generator_layout_3d, 
-            (TextureDimension::D2, NoiseOp::Modifier) => &self.modifier_layout_2d,
-            (TextureDimension::D3, NoiseOp::Modifier) => &self.modifier_layout_3d, 
-            _ => unreachable!(),
-        }
+        self.layouts.get(&key).unwrap()
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ComputeNoisePipelineKey {
-    pub type_id: TypeId,
+    pub id: u64,
     pub dimension: TextureDimension,
-    pub op: NoiseOp,
 }
 
 impl SpecializedComputePipeline for ComputeNoisePipeline {
@@ -220,7 +174,7 @@ impl SpecializedComputePipeline for ComputeNoisePipeline {
             layout: vec![layout.clone()],
             push_constant_ranges: Vec::new(),
             shader: self.shaders.get(&key).unwrap().clone(),
-            shader_defs: self.shader_defs.get(&key).cloned().unwrap_or_default(),
+            shader_defs: Vec::new(),
             entry_point: "main".into(),
             zero_initialize_workgroup_memory: false,
         }

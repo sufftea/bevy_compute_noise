@@ -1,6 +1,7 @@
 use std::any::{Any, TypeId};
 
-use bevy::{prelude::*, reflect::{FromReflect, GetTypeRegistration, TypePath, Typed}, render::{render_resource::Buffer, renderer::RenderDevice}};
+use bevy::{prelude::*, reflect::{FromReflect, GetTypeRegistration, TypePath, Typed}, render::{render_resource::{Buffer, ShaderRef}, renderer::RenderDevice}};
+use bytemuck::Pod;
 
 use crate::{noise_queue::QueueNoiseOp, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
 
@@ -10,13 +11,13 @@ pub mod modifiers;
 pub trait ComputeNoise: Sync + Send + 'static + Default + Clone + TypePath + FromReflect + GetTypeRegistration + Typed + ComputeNoiseShader {
     const NOISE_OP: NoiseOp;
 
-    fn buffers(&self, render_device: &RenderDevice) -> Vec<Buffer>;
+    fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer>;
 
     fn input_image(self, input: Handle<Image>) -> QueueNoiseOp {
         let erased = ErasedComputeNoise::from(self);
         match Self::NOISE_OP {
-            NoiseOp::Modifier => QueueNoiseOp::Modify(input, erased),
-            NoiseOp::Combiner => panic!("Use with_inputs for combiners"),
+            NoiseOp::Modifier => QueueNoiseOp::Modify(Some(input), erased),
+            NoiseOp::Combiner => QueueNoiseOp::Combine(Some(input), None, erased),
             _ => panic!("Operation doesn't support input images"),
         }
     }
@@ -24,15 +25,20 @@ pub trait ComputeNoise: Sync + Send + 'static + Default + Clone + TypePath + Fro
     fn input_images(self, input1: Handle<Image>, input2: Handle<Image>) -> QueueNoiseOp {
         let erased = ErasedComputeNoise::from(self);
         match Self::NOISE_OP {
-            NoiseOp::Combiner => QueueNoiseOp::Combine(input1, input2, erased),
+            NoiseOp::Combiner => QueueNoiseOp::Combine(Some(input1), Some(input2), erased),
             _ => panic!("Operation doesn't support multiple inputs"),
         }
     }
 }
 
+pub trait ComputeNoiseType: ComputeNoise + Pod {
+    fn embed_shaders(app: &mut App);
+    fn shader() -> ShaderRef;
+}
+
 pub struct ErasedComputeNoise {
     noise_data: Box<dyn Any + Send + Sync>,
-    buffers_fn: Box<dyn Fn(&RenderDevice) -> Vec<Buffer> + Send + Sync>,
+    buffer_fn: Box<dyn Fn(&RenderDevice) -> Vec<Buffer> + Send + Sync>,
     pub type_id: TypeId,
 
     pub struct_name: Option<&'static str>,
@@ -45,8 +51,8 @@ impl ErasedComputeNoise {
         self.noise_data.downcast_ref::<T>()
     }
 
-    pub fn buffers(&self, render_device: &RenderDevice) -> Vec<Buffer> {
-        (self.buffers_fn)(render_device)
+    pub fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer> {
+        (self.buffer_fn)(render_device)
     }
 
     fn needs_uniform(&self) -> bool {
@@ -58,7 +64,7 @@ impl<T: ComputeNoise> From<T> for ErasedComputeNoise {
     fn from(value: T) -> Self {
         Self {
             noise_data: Box::new(value.clone()),
-            buffers_fn: Box::new(move |render_device| value.buffers(render_device)),
+            buffer_fn: Box::new(move |render_device| value.create_buffer(render_device)),
             type_id: TypeId::of::<T>(),
 
             struct_name: T::struct_name(),

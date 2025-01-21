@@ -35,19 +35,14 @@ pub fn compute_noise(
     
     let mut dispatched = Vec::new();
     for (seq_idx, sequence) in compute_noise_queue.queue.iter().enumerate() {
-        if sequence.iter().all(|render_noise| {
-            pipeline_cache.get_compute_pipeline(render_noise.pipeline_id).is_some()
-        }) {
-            for render_noise in sequence {
-                let pipeline = pipeline_cache.get_compute_pipeline(render_noise.pipeline_id).unwrap();
-                pass.set_pipeline(pipeline);
-                pass.set_bind_group(0, &render_noise.bind_group, &[]);
-    
-                let workgroups = render_noise.size.workgroup_count();
-                pass.dispatch_workgroups(workgroups.0, workgroups.1, workgroups.2);
-            }
-            dispatched.push(seq_idx);
+        if let Some(pipeline) = pipeline_cache.get_compute_pipeline(sequence.pipeline_id) {
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &sequence.bind_group, &[]);
 
+            let workgroups = sequence.size.workgroup_count();
+            pass.dispatch_workgroups(workgroups.0, workgroups.1, workgroups.2);
+
+            dispatched.push(seq_idx);
         }
     }
 

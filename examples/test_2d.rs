@@ -71,7 +71,7 @@ fn setup(
     noise_queue.queue(handle.clone(), (
         Perlin::default(),
         Invert,
-        Store(Channel::R)
+        // Store(Channel::R)
     ));
 
     commands.spawn((

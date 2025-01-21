@@ -1,36 +1,37 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use bevy::{
     prelude::*, render::{
-        render_resource::{BindGroup, Buffer, CachedComputePipelineId, TextureDimension}, renderer::RenderDevice,
+        render_resource::{binding_types::{uniform_buffer, uniform_buffer_sized}, BindGroup, BindGroupLayout, BindGroupLayoutEntries, Buffer, CachedComputePipelineId, DynamicBindGroupLayoutEntries, ShaderStages, TextureDimension}, renderer::RenderDevice,
     }
 };
 
-use crate::{image::ComputeNoiseSize, noise::{ComputeNoise, ErasedComputeNoise}, render::pipeline::{ComputeNoisePipelineKey, NoiseOp}};
+use crate::{image::ComputeNoiseSize, noise::{ComputeNoise, ErasedComputeNoise}, render::pipeline::{noise_texture_2d, ComputeNoisePipelineKey, NoiseOp}, shader::generate_noise_shader};
 
 pub(crate) struct ComputeNoiseInstruction {
     pub images: Vec<Handle<Image>>,
     pub noise: ErasedComputeNoise,
     pub op: NoiseOp,
 }
-pub struct ComputeNoiseSequence(pub(crate) Vec<ComputeNoiseInstruction>);
+pub struct ComputeNoiseSequence {
+    pub(crate) output: Handle<Image>,
+    pub(crate) instructions: Vec<ComputeNoiseInstruction>
+}
+
+impl ComputeNoiseSequence {
+    pub fn key_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        for instruction in &self.instructions {
+            instruction.noise.type_id.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+}
 
 pub enum QueueNoiseOp {
     Generate(ErasedComputeNoise),
-    Modify(Handle<Image>, ErasedComputeNoise),
-    Combine(Handle<Image>, Handle<Image>, ErasedComputeNoise),
-}
-
-impl QueueNoiseOp {
-    fn resolve_images(self, output: Handle<Image>) -> Self {
-        match self {
-            QueueNoiseOp::Generate(noise) => QueueNoiseOp::Generate(noise),
-            QueueNoiseOp::Modify(input, noise) if input == Handle::default() => 
-                QueueNoiseOp::Modify(output.clone(), noise),
-            QueueNoiseOp::Modify(input, noise) => QueueNoiseOp::Modify(input, noise),
-            QueueNoiseOp::Combine(input1, input2, noise) if input1 == Handle::default() && input2 == Handle::default() =>
-                QueueNoiseOp::Combine(output.clone(), output.clone(), noise),
-            QueueNoiseOp::Combine(input1, input2, noise) => QueueNoiseOp::Combine(input1, input2, noise),
-        }
-    }
+    Modify(Option<Handle<Image>>, ErasedComputeNoise),
+    Combine(Option<Handle<Image>>, Option<Handle<Image>>, ErasedComputeNoise),
 }
 
 impl<T: ComputeNoise> From<T> for QueueNoiseOp {
@@ -38,8 +39,8 @@ impl<T: ComputeNoise> From<T> for QueueNoiseOp {
         let erased = ErasedComputeNoise::from(noise);
         match T::NOISE_OP {
             NoiseOp::Generator => QueueNoiseOp::Generate(erased),
-            NoiseOp::Modifier => QueueNoiseOp::Modify(Handle::default(), erased),
-            NoiseOp::Combiner => QueueNoiseOp::Combine(Handle::default(), Handle::default(), erased),
+            NoiseOp::Modifier => QueueNoiseOp::Modify(None, erased),
+            NoiseOp::Combiner => QueueNoiseOp::Combine(None, None, erased),
         }
     }
 }
@@ -50,24 +51,42 @@ pub trait IntoNoiseSequence {
 
 impl IntoNoiseSequence for QueueNoiseOp {
     fn into_sequence(self, output: Handle<Image>) -> ComputeNoiseSequence {
-        let instruction = match self.resolve_images(output.clone()) {
+        let instruction = match self {
             QueueNoiseOp::Generate(noise) => ComputeNoiseInstruction {
-                images: vec![output],
+                images: vec![],
                 noise,
                 op: NoiseOp::Generator,
             },
-            QueueNoiseOp::Modify(input, noise) => ComputeNoiseInstruction {
-                images: vec![input, output],
-                noise,
-                op: NoiseOp::Modifier,
+            QueueNoiseOp::Modify(input, noise) => {
+                let mut images = Vec::new();
+                if let Some(input) = input {
+                    images.push(input);
+                }
+                ComputeNoiseInstruction {
+                    images,
+                    noise,
+                    op: NoiseOp::Modifier,
+                }
             },
-            QueueNoiseOp::Combine(input1, input2, noise) => ComputeNoiseInstruction {
-                images: vec![input1, input2, output],
-                noise,
-                op: NoiseOp::Combiner,
+            QueueNoiseOp::Combine(input1, input2, noise) => {
+                let mut images = Vec::new();
+                if let Some(input1) = input1 {
+                    images.push(input1);
+                }
+                if let Some(input2) = input2 {
+                    images.push(input2);
+                }
+                ComputeNoiseInstruction {
+                    images,
+                    noise,
+                    op: NoiseOp::Combiner,
+                }
             },
         };
-        ComputeNoiseSequence(vec![instruction])
+        ComputeNoiseSequence {
+            output,
+            instructions: vec![instruction]
+        }
     }
 }
 
@@ -80,11 +99,14 @@ impl<T: ComputeNoise> IntoNoiseSequence for T {
 macro_rules! impl_into_noise_sequence_tuple {
     ($($idx:tt : $type:ident),+) => {
         impl<$($type: IntoNoiseSequence),+> IntoNoiseSequence for ($($type,)+) {
-            fn into_sequence(self, image: Handle<Image>) -> ComputeNoiseSequence {
-                let mut result = ComputeNoiseSequence(Vec::new());
+            fn into_sequence(self, output: Handle<Image>) -> ComputeNoiseSequence {
+                let mut result = ComputeNoiseSequence {
+                    output: output.clone(),
+                    instructions: Vec::new(),
+                };
                 $(
-                    let seq = self.$idx.into_sequence(image.clone());
-                    result.0.extend(seq.0);
+                    let seq = self.$idx.into_sequence(output.clone());
+                    result.instructions.extend(seq.instructions);
                 )+
                 result
             }
@@ -116,15 +138,18 @@ impl ComputeNoiseQueue {
     }
 }
 
-pub fn prepare_compute_noise_buffers(
+pub(crate) fn prepare_compute_noise_buffers(
     images: Res<Assets<Image>>,
     render_device: Res<RenderDevice>,
     mut noise_queue: ResMut<ComputeNoiseQueue>,
-    mut noise_buffer_queue: ResMut<ComputeNoiseBufferQueue>,
+    mut noise_buffer_queue: ResMut<ComputeNoiseResourceQueue>,
+    mut shaders: ResMut<Assets<Shader>>,
 ) {
     for item in &noise_queue.queue {
-        let sizes: Vec<ComputeNoiseSize> = item.0.iter()
-            .flat_map(|instruction| instruction.images.iter())
+        let sizes: Vec<ComputeNoiseSize> = std::iter::once(&item.output)
+            .chain(item.instructions.iter()
+                .flat_map(|instruction| instruction.images.iter())
+            )
             .map(|image_handle| {
                 images.get(image_handle).unwrap().texture_descriptor.size.into()
             })
@@ -135,49 +160,65 @@ pub fn prepare_compute_noise_buffers(
             continue;
         }
 
-        let sequence_buffers: Vec<ComputeNoiseBuffers> = item.0.iter().zip(&sizes).map(|(instruction, size)| {
-            ComputeNoiseBuffers {
-                key: ComputeNoisePipelineKey {
-                    type_id: instruction.noise.type_id,
-                    dimension: (*size).into(),
-                    op: instruction.op,
-                },
-                images: instruction.images.clone(),
-                buffers: instruction.noise.buffers(&render_device),
-                size: *size,
-            }
-        }).collect();
-
-        noise_buffer_queue.queue.push(sequence_buffers);
+        let buffer = ComputeNoiseResources {
+            key: ComputeNoisePipelineKey {
+                id: item.key_id(),
+                dimension: sizes[0].into(),
+            },
+            size: sizes[0],
+            resources: std::iter::once(ComputeNoiseResource::Image(item.output.clone()))
+                .chain(item.instructions.iter()
+                    .flat_map(|instruction| {
+                        instruction.images.iter()
+                            .map(|image| ComputeNoiseResource::Image(image.clone()))
+                            .chain(instruction.noise.create_buffer(&render_device)
+                                .into_iter()
+                                .map(ComputeNoiseResource::Buffer))
+                }))
+                .collect(),
+            shader: shaders.add(
+                Shader::from_wgsl(
+                    generate_noise_shader(item), 
+                    format!("compute_noise_{}.wgsl", item.key_id())
+                )
+            ),
+        };
+        noise_buffer_queue.queue.push(buffer);
     }
     
     noise_queue.queue.clear();
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum ComputeNoiseResource {
+    Image(Handle<Image>),
+    Buffer(Buffer),
+}
+
 // Main/Render World
 #[derive(Clone)]
-pub struct ComputeNoiseBuffers {
+pub(crate) struct ComputeNoiseResources {
     pub key: ComputeNoisePipelineKey,
-    pub images: Vec<Handle<Image>>,
-    pub buffers: Vec<Buffer>,
     pub size: ComputeNoiseSize,
+    pub resources: Vec<ComputeNoiseResource>,
+    pub shader: Handle<Shader>,
 }
 
 #[derive(Resource, Clone, Default)]
-pub struct ComputeNoiseBufferQueue {
-    pub queue: Vec<Vec<ComputeNoiseBuffers>>,
+pub(crate) struct ComputeNoiseResourceQueue {
+    pub queue: Vec<ComputeNoiseResources>,
 }
 
 // Render World
 #[derive(Clone)]
 pub struct RenderComputeNoise {
     pub key: ComputeNoisePipelineKey,
+    pub size: ComputeNoiseSize,
     pub bind_group: BindGroup,
     pub pipeline_id: CachedComputePipelineId,
-    pub size: ComputeNoiseSize,
 }
 
 #[derive(Default, Resource)]
 pub(crate) struct ComputeNoiseRenderQueue {
-    pub queue: Vec<Vec<RenderComputeNoise>>,
+    pub queue: Vec<RenderComputeNoise>,
 }

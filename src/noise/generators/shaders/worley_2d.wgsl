@@ -1,4 +1,4 @@
-#define_import_path bevy_compute_noise::worley_2d
+#define_import_path bevy_compute_noise::worley
 
 #import bevy_compute_noise::util::{hash22, INFINITY, texture2d as texture}
 

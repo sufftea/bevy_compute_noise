@@ -1,21 +1,22 @@
 use bevy::{app::App, asset::embedded_asset, reflect::Reflect, render::{render_resource::{Buffer, ShaderRef}, renderer::RenderDevice}};
+use bytemuck::{Pod, Zeroable};
 
-use crate::{noise::ComputeNoise, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
+use crate::{noise::{ComputeNoise, ComputeNoiseType}, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
 
-use super::ComputeNoiseModifier;
 
-#[derive(Clone, Reflect, Default)]
+#[derive(Clone, Copy, Reflect, Default, Pod, Zeroable)]
+#[repr(C)]
 pub struct Invert;
 
 impl ComputeNoise for Invert {
     const NOISE_OP: NoiseOp = NoiseOp::Modifier; 
 
-    fn buffers(&self, _render_device: &RenderDevice) -> Vec<Buffer> {
+    fn create_buffer(&self, _render_device: &RenderDevice) -> Vec<Buffer> {
         Vec::new()
     }
 }
 
-impl ComputeNoiseModifier for Invert {
+impl ComputeNoiseType for Invert {
     fn embed_shaders(app: &mut App) {     
         embedded_asset!(app, "shaders/invert.wgsl");
     }

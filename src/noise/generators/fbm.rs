@@ -1,10 +1,9 @@
 use bevy::{reflect::Reflect, render::{render_resource::{Buffer, BufferInitDescriptor, BufferUsages}, renderer::RenderDevice}};
-use crate::{render::pipeline::NoiseOp, shader::ComputeNoiseShader};
+use crate::{noise::{ComputeNoise, ComputeNoiseType}, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
 
-use super::{ComputeNoise, ComputeNoiseGenerator};
 
 #[derive(Clone, Reflect)]
-pub struct Fbm<T: ComputeNoiseGenerator> {
+pub struct Fbm<T: ComputeNoiseType> {
     pub noise: T,
     pub octaves: u32,
     pub lacunarity: f32,
@@ -20,10 +19,10 @@ bitflags::bitflags! {
     }
 }
 
-impl<T: ComputeNoiseGenerator> ComputeNoise for Fbm<T> {
+impl<T: ComputeNoiseType> ComputeNoise for Fbm<T> {
     const NOISE_OP: NoiseOp = NoiseOp::Generator; 
 
-    fn buffers(&self, render_device: &RenderDevice) -> Vec<Buffer> {
+    fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer> {
         vec![
             render_device.create_buffer_with_data(
                 &BufferInitDescriptor {
@@ -42,7 +41,7 @@ impl<T: ComputeNoiseGenerator> ComputeNoise for Fbm<T> {
     }
 }
 
-impl<T: ComputeNoiseGenerator> Default for Fbm<T> {
+impl<T: ComputeNoiseType> Default for Fbm<T> {
     fn default() -> Self {
         Self {
             noise: T::default(),
@@ -54,7 +53,7 @@ impl<T: ComputeNoiseGenerator> Default for Fbm<T> {
     }
 }
 
-impl<T: ComputeNoiseGenerator> ComputeNoiseShader for Fbm<T> {
+impl<T: ComputeNoiseType> ComputeNoiseShader for Fbm<T> {
     fn function_name() -> &'static str {
         "fbm"
     }

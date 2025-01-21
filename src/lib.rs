@@ -3,13 +3,12 @@ use std::marker::PhantomData;
 use bevy::{
     asset::embedded_asset, prelude::*, render::{render_resource::SpecializedComputePipelines, Render, RenderApp, RenderSet}
 };
-use crate::noise::modifiers::{invert::Invert, ComputeNoiseModifier};
-use noise::generators::{Perlin, Worley};
-use noise_queue::{prepare_compute_noise_buffers, ComputeNoiseBufferQueue};
-use render::{compute::{compute_noise, submit_compute_noise, ComputeNoiseEncoder}, pipeline::{load_generator_shader, load_fbm_shaders, load_modifier_shader, ComputeNoisePipeline}};
+use crate::noise::modifiers::invert::Invert;
+use noise::{generators::{Perlin, Worley}, ComputeNoise, ComputeNoiseType};
+use noise_queue::{prepare_compute_noise_buffers, ComputeNoiseResourceQueue};
+use render::{compute::{compute_noise, submit_compute_noise, ComputeNoiseEncoder}, pipeline::{load_base_shader, ComputeNoisePipeline}, prepare::create_bind_group_layout};
 
 use crate::{
-    noise::generators::ComputeNoiseGenerator,
     noise_queue::{ComputeNoiseQueue, ComputeNoiseRenderQueue},
     render::{
         extract::extract_compute_noise_queue,
@@ -34,9 +33,9 @@ pub mod prelude {
 }
 
 #[derive(Default)]
-pub struct ComputeNoiseGeneratorPlugin<T: ComputeNoiseGenerator>(PhantomData<T>);
+pub struct ComputeNoiseTypePlugin<T: ComputeNoise>(PhantomData<T>);
 
-impl<T: ComputeNoiseGenerator> Plugin for ComputeNoiseGeneratorPlugin<T> {
+impl<T: ComputeNoiseType> Plugin for ComputeNoiseTypePlugin<T> {
     fn build(&self, app: &mut App) {
         T::embed_shaders(app);
         app.register_type::<T>();
@@ -44,28 +43,10 @@ impl<T: ComputeNoiseGenerator> Plugin for ComputeNoiseGeneratorPlugin<T> {
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        load_generator_shader::<T>(render_app.world_mut());
-        load_fbm_shaders::<T>(render_app.world_mut());
+        load_base_shader::<T>(render_app.world_mut()); 
     }
 }
 
-#[derive(Default)]
-pub struct ComputeNoiseModificationPlugin<T: ComputeNoiseModifier>(PhantomData<T>);
-impl<T: ComputeNoiseModifier> Plugin for ComputeNoiseModificationPlugin<T> {
-    fn build(&self, app: &mut App) {
-        T::embed_shaders(app);
-    }
-
-    fn finish(&self, app: &mut App) { 
-        let render_app = app.sub_app_mut(RenderApp);
-        load_modifier_shader::<T>(render_app.world_mut());
-    }
-}
-
-// TODO: take in shader so can use custom noise with fbm
-// pub struct ComputeNoisePlugin {
-//     fbm_shader: &'static str,
-// }
 pub struct ComputeNoisePlugin;
 impl Plugin for ComputeNoisePlugin {
     fn build(&self, app: &mut App) {
@@ -74,12 +55,12 @@ impl Plugin for ComputeNoisePlugin {
 
         app
             .add_plugins((
-                ComputeNoiseGeneratorPlugin::<Perlin>::default(),
-                ComputeNoiseGeneratorPlugin::<Worley>::default(),
-                ComputeNoiseModificationPlugin::<Invert>::default(),
+                ComputeNoiseTypePlugin::<Perlin>::default(),
+                ComputeNoiseTypePlugin::<Worley>::default(),
+                ComputeNoiseTypePlugin::<Invert>::default(),
             ))
             .init_resource::<ComputeNoiseQueue>()
-            .init_resource::<ComputeNoiseBufferQueue>()
+            .init_resource::<ComputeNoiseResourceQueue>()
             .add_systems(PostUpdate, prepare_compute_noise_buffers);
 
         let render_app = app.sub_app_mut(RenderApp);
@@ -90,6 +71,7 @@ impl Plugin for ComputeNoisePlugin {
             .add_systems(
                 Render,
                 (
+                    create_bind_group_layout.in_set(RenderSet::Prepare),
                     prepare_render_noise.in_set(RenderSet::PrepareBindGroups),
                     (compute_noise, submit_compute_noise).after(RenderSet::PrepareBindGroups).before(RenderSet::Render).chain(),
                 )

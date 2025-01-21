@@ -1,4 +1,4 @@
-#define_import_path bevy_compute_noise::perlin_2d
+#define_import_path bevy_compute_noise::perlin
 
 #import bevy_render::maths::PI
 #import bevy_compute_noise::util::{random_gradient_2d, interpolate_quintic, interpolate_cubic, texture2d as texture}
