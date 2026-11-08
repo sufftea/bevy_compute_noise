@@ -1,4 +1,4 @@
-use bevy::{asset::Handle, render::render_resource::TextureDimension, utils::hashbrown::HashSet};
+use bevy::{asset::Handle, platform::collections::HashSet, render::render_resource::TextureDimension, };
 
 use crate::{noise::ComputeNoise, noise_queue::{ComputeNoiseInstruction, ComputeNoiseSequence, IntoNoiseSequence}, prelude::{Invert, Perlin}, render::pipeline::NoiseOp};
 
@@ -37,14 +37,14 @@ impl ComputeNoiseShaderBuilder {
 
                 if let Some(struct_name) = instruction.noise.struct_name {
                     self.shader.push_str(&format!(
-                        "#import {}::{{{}, {}}}\n",
+                        "import {}::{{{}, {}}};\n",
                         instruction.noise.import_path,
                         struct_name,
                         fn_name,
                     ));
                 } else {
                     self.shader.push_str(&format!(
-                        "#import {}::{}\n",
+                        "import {}::{};\n",
                         instruction.noise.import_path,
                         fn_name,
                     ));

@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    asset::embedded_asset, prelude::*, render::{render_resource::SpecializedComputePipelines, Render, RenderApp, RenderSet}
+    asset::embedded_asset, prelude::*, render::{render_resource::SpecializedComputePipelines, 
+        Render, RenderApp, RenderSystems}
 };
 use crate::noise::modifiers::invert::Invert;
 use noise::{generators::{Perlin, Worley}, ComputeNoise, ComputeNoiseType};
@@ -50,8 +51,8 @@ impl<T: ComputeNoiseType> Plugin for ComputeNoiseTypePlugin<T> {
 pub struct ComputeNoisePlugin;
 impl Plugin for ComputeNoisePlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "noise/shaders/util.wgsl");
-        embedded_asset!(app, "noise/generators/shaders/fbm.wgsl");
+        embedded_asset!(app, "noise/shaders/util.wesl");
+        embedded_asset!(app, "noise/generators/shaders/fbm.wesl");
 
         app
             .add_plugins((
@@ -71,9 +72,10 @@ impl Plugin for ComputeNoisePlugin {
             .add_systems(
                 Render,
                 (
-                    create_bind_group_layout.in_set(RenderSet::Prepare),
-                    prepare_render_noise.in_set(RenderSet::PrepareBindGroups),
-                    (compute_noise, submit_compute_noise).after(RenderSet::PrepareBindGroups).before(RenderSet::Render).chain(),
+                    create_bind_group_layout.in_set(RenderSystems::Prepare),
+                    prepare_render_noise.in_set(RenderSystems::PrepareBindGroups),
+                    (compute_noise, 
+                     submit_compute_noise).after(RenderSystems::PrepareBindGroups).before(RenderSystems::Render).chain(),
                 )
             );
     }

@@ -1,7 +1,7 @@
-#define_import_path bevy_compute_noise::util
+// #define_import_path bevy_compute_noise::util
 
-#import bevy_render::maths::PI
-#import bevy_pbr::utils::{rand_vec2f, rand_f}
+import bevy_render::maths::PI;
+import bevy_pbr::render::utils::{rand_vec2f, rand_f};
 
 @group(0) @binding(0) var texture2d: texture_storage_2d<rgba8unorm, read_write>;
 @group(0) @binding(0) var texture3d: texture_storage_3d<rgba8unorm, read_write>;

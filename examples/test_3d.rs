@@ -1,4 +1,12 @@
-use bevy::{image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor}, prelude::*, render::{mesh::VertexAttributeValues, render_resource::{AsBindGroup, ShaderRef}}, sprite::{Material2d, Material2dPlugin}};
+use bevy::{
+    image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
+    prelude::*,
+    render::{
+        mesh::VertexAttributeValues,
+        render_resource::{AsBindGroup, ShaderRef},
+    },
+    sprite::{Material2d, Material2dPlugin},
+};
 use bevy_compute_noise::prelude::*;
 
 fn main() {
@@ -10,6 +18,7 @@ fn main() {
             ComputeNoisePlugin,
         ))
         .add_systems(Startup, setup)
+        .add_systems(Update, animate_noise)
         // .add_systems(Update, update_noise)
         .run();
 }
@@ -45,14 +54,17 @@ fn setup(
     //     },
     // );
 
-    noise_queue.queue(handle.clone(), (
-        Worley {
-            flags: WorleyFlags::TILEABLE.bits(),
-            ..default()
-        },
-        Invert,
-        // Store(Channel::R)
-    ));
+    noise_queue.queue(
+        handle.clone(),
+        (
+            Worley {
+                flags: WorleyFlags::TILEABLE.bits(),
+                ..default()
+            },
+            Invert,
+            // Store(Channel::R)
+        ),
+    );
 
     let mut quad = Rectangle::default().mesh().build();
     if let Some(uvs) = quad.attribute_mut(Mesh::ATTRIBUTE_UV_0) {
@@ -63,8 +75,8 @@ fn setup(
         }
     }
 
-    commands.spawn(( 
-        Mesh2d(meshes.add(quad).into()),
+    commands.spawn((
+        Mesh2d(meshes.add(quad)),
         MeshMaterial2d(materials.add(Image3dMaterial {
             image: handle.clone(),
             layer: 0,
@@ -73,6 +85,22 @@ fn setup(
     ));
 
     commands.spawn(Camera2d::default());
+}
+
+fn animate_noise(
+    mut materials: ResMut<Assets<Image3dMaterial>>,
+    time: Res<Time>,
+    mut last_update_secs: Local<f32>,
+) {
+    *last_update_secs += time.delta_secs();
+
+    if *last_update_secs > 0.1 {
+        for material in materials.iter_mut() {
+            material.1.layer = (material.1.layer + 1) % 128;
+        }
+
+        *last_update_secs = 0.0;
+    }
 }
 
 // fn update_noise(
@@ -99,7 +127,7 @@ fn setup(
 //                 }.into(),
 //             );
 //         }
-        
+
 //         *local = *local + 1;
 //     }
 // }
@@ -115,6 +143,6 @@ struct Image3dMaterial {
 
 impl Material2d for Image3dMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/image_3d_shader.wgsl".into()
+        "shaders/image_3d_shader.wgel".into()
     }
 }

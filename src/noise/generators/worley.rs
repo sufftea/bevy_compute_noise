@@ -1,7 +1,16 @@
-use bevy::{asset::embedded_asset, prelude::*, render::{render_resource::{Buffer, BufferInitDescriptor, BufferUsages, ShaderDefVal, ShaderRef}, renderer::RenderDevice}};
+use bevy::{
+    asset::embedded_asset, prelude::*, render::{
+        render_resource::{Buffer, BufferInitDescriptor, BufferUsages},
+        renderer::RenderDevice,
+    }, shader::ShaderRef,
+};
 use bytemuck::{Pod, Zeroable};
 
-use crate::{noise::{ComputeNoise, ComputeNoiseType}, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
+use crate::{
+    noise::{ComputeNoise, ComputeNoiseType},
+    render::pipeline::NoiseOp,
+    shader::ComputeNoiseShader,
+};
 
 #[derive(Clone, Copy, Reflect, PartialEq, Debug, Pod, Zeroable)]
 #[reflect(Default)]
@@ -12,7 +21,7 @@ pub struct Worley {
     pub flags: u32,
 }
 
-bitflags::bitflags! { 
+bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct WorleyFlags: u32 {
         const TILEABLE = 1 << 0;
@@ -30,28 +39,26 @@ impl Default for Worley {
 }
 
 impl ComputeNoise for Worley {
-    const NOISE_OP: NoiseOp = NoiseOp::Generator; 
+    const NOISE_OP: NoiseOp = NoiseOp::Generator;
 
     fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer> {
         vec![
-            render_device.create_buffer_with_data(
-                &BufferInitDescriptor {
-                    label: Some("worley2d_points_buffer"),
-                    contents: &bytemuck::cast_slice(&[self.clone()]),
-                    usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST
-                }
-            ),
-        ] 
+            render_device.create_buffer_with_data(&BufferInitDescriptor {
+                label: Some("worley2d_points_buffer"),
+                contents: &bytemuck::cast_slice(&[self.clone()]),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            }),
+        ]
     }
 }
 
 impl ComputeNoiseType for Worley {
     fn shader() -> ShaderRef {
-        "embedded://bevy_compute_noise/noise/generators/shaders/worley.wgsl".into()
+        "embedded://bevy_compute_noise/noise/generators/shaders/worley.wesl".into()
     }
 
     fn embed_shaders(app: &mut App) {
-        embedded_asset!(app, "shaders/worley.wgsl");
+        embedded_asset!(app, "shaders/worley.wesl");
     }
 }
 
@@ -64,10 +71,11 @@ impl ComputeNoiseShader for Worley {
     }
 
     fn import_path() -> &'static str {
-        "bevy_compute_noise::worley"
+        "bevy_compute_noise::noise::generators::shaders::worley"
     }
 
     fn struct_name() -> Option<&'static str> {
         Some("Worley")
     }
 }
+

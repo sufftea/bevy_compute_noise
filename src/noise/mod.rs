@@ -1,6 +1,6 @@
 use std::any::{Any, TypeId};
 
-use bevy::{prelude::*, reflect::{FromReflect, GetTypeRegistration, TypePath, Typed}, render::{render_resource::{Buffer, ShaderRef}, renderer::RenderDevice}};
+use bevy::{prelude::*, reflect::{FromReflect, GetTypeRegistration, TypePath, Typed}, render::{render_resource::Buffer, renderer::RenderDevice}, shader::ShaderRef};
 use bytemuck::Pod;
 
 use crate::{noise_queue::QueueNoiseOp, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
