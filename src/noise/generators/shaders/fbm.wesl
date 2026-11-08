@@ -1,21 +1,21 @@
-#ifdef 2D
-    #import bevy_compute_noise::util::texture2d as texture
-    #ifdef PERLIN
-        #import bevy_compute_noise::perlin_2d::{Perlin as Noise, perlin_2d as noise_fn}
-    #endif
-    #ifdef WORLEY
-        #import bevy_compute_noise::worley_2d::{Worley as Noise, worley_2d as noise_fn}
-    #endif
-#endif
-#ifdef 3D
-    #import bevy_compute_noise::util::texture3d as texture
-    #ifdef PERLIN
-        #import bevy_compute_noise::perlin_3d::{Perlin as Noise, perlin_3d as noise_fn}
-    #endif
-    #ifdef WORLEY
-        #import bevy_compute_noise::worley_3d::{Worley as Noise, worley_3d as noise_fn}
-    #endif
-#endif
+@ifdef(2D) {
+    import bevy_compute_noise::noise::shaders::util::texture2d as texture;
+    @ifdef(PERLIN) {
+        import bevy_compute_noise::perlin_2d::{Perlin as Noise, perlin_2d as noise_fn};
+    }
+    @ifdef(WORLEY) {
+        import bevy_compute_noise::worley_2d::{Worley as Noise, worley_2d as noise_fn};
+    }
+}
+@ifdef(3D) {
+    import bevy_compute_noise::noise::shaders::util::texture3d as texture;
+    @ifdef(PERLIN) {
+        import bevy_compute_noise::perlin_3d::{Perlin as Noise, perlin_3d as noise_fn};
+    }
+    @ifdef(WORLEY) {
+        import bevy_compute_noise::worley_3d::{Worley as Noise, worley_3d as noise_fn};
+    }
+}
 
 const INVERT: u32 = 1u;
 const BILLOWY: u32 = 2u;
@@ -29,12 +29,12 @@ struct Config {
 }
 @group(0) @binding(1) var<uniform> config: Config;
 
-#ifdef 2D
+@ifdef(2D) {
     @compute @workgroup_size(32, 32)
-#endif
-#ifdef 3D
+}
+@ifdef(3D) {
     @compute @workgroup_size(8, 8, 8)
-#endif
+}
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let texture_size = textureDimensions(texture);
     #ifdef 2D

@@ -1,15 +1,25 @@
 use bevy::{
+    material::descriptor::BindGroupLayoutDescriptor,
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_resource::{BindGroupEntry, BindGroupLayoutEntry, BindingType, BufferBindingType, IntoBinding, PipelineCache, ShaderStages, SpecializedComputePipelines, StorageTextureAccess, TextureFormat, TextureViewDimension},
+        render_resource::{
+            BindGroupEntry, BindGroupLayoutEntry, BindingType, BufferBindingType, IntoBinding,
+            PipelineCache, ShaderStages, SpecializedComputePipelines, StorageTextureAccess,
+            TextureFormat, TextureViewDimension,
+        },
         renderer::RenderDevice,
         texture::GpuImage,
     },
 };
 
 use crate::{
-    image::ComputeNoiseSize, noise_queue::{ComputeNoiseRenderQueue, ComputeNoiseResource, ComputeNoiseResourceQueue, RenderComputeNoise}, render::pipeline::ComputeNoisePipeline
+    image::ComputeNoiseSize,
+    noise_queue::{
+        ComputeNoiseRenderQueue, ComputeNoiseResource, ComputeNoiseResourceQueue,
+        RenderComputeNoise,
+    },
+    render::pipeline::ComputeNoisePipeline,
 };
 
 pub fn prepare_render_noise(
@@ -22,32 +32,34 @@ pub fn prepare_render_noise(
     mut render_queue: ResMut<ComputeNoiseRenderQueue>,
 ) {
     for noise in queue.queue.iter() {
-        let resources: Option<Vec<_>> = noise.resources.iter()
+        let resources: Option<Vec<_>> = noise
+            .resources
+            .iter()
             .map(|resource| match resource {
-                ComputeNoiseResource::Image(handle) => gpu_images.get(handle)
-                    .map(|image| (true, image.texture_view.into_binding())),
-                ComputeNoiseResource::Buffer(buffer) => Some((false, buffer.as_entire_binding())),
+                ComputeNoiseResource::Image(handle) => gpu_images
+                    .get(handle)
+                    .map(|image| image.texture_view.into_binding()),
+                ComputeNoiseResource::Buffer(buffer) => Some(buffer.as_entire_binding()),
             })
             .collect();
-        
+
         if let Some(resources) = resources {
-            let layout = pipeline.get_layout(noise.key);
+            let layout_descriptor = pipeline.get_layout_descriptor(noise.key);
+            let layout = &pipeline_cache.get_bind_group_layout(layout_descriptor);
             let bind_group = render_device.create_bind_group(
                 Some("compute_noise_bind_group"),
-                &layout,
-                &resources.iter().enumerate()
-                    .map(|(i, (_, resource))| BindGroupEntry {
+                layout,
+                &resources
+                    .iter()
+                    .enumerate()
+                    .map(|(i, resource)| BindGroupEntry {
                         binding: i as u32,
                         resource: resource.clone(),
                     })
                     .collect::<Vec<_>>(),
             );
 
-            let pipeline_id = pipelines.specialize(
-                &pipeline_cache, 
-                &pipeline, 
-                noise.key,
-            );
+            let pipeline_id = pipelines.specialize(&pipeline_cache, &pipeline, noise.key);
 
             render_queue.queue.push(RenderComputeNoise {
                 key: noise.key,
@@ -65,7 +77,9 @@ pub fn create_bind_group_layout(
     queue: Res<ComputeNoiseResourceQueue>,
 ) {
     for sequence in &queue.queue {
-        if pipeline.layouts.contains_key(&sequence.key) { continue; }
+        if pipeline.layouts.contains_key(&sequence.key) {
+            continue;
+        }
 
         let mut entries = Vec::new();
         let view_dimension = match sequence.size {
@@ -86,7 +100,7 @@ pub fn create_bind_group_layout(
                         },
                         count: None,
                     });
-                },
+                }
                 ComputeNoiseResource::Buffer(_) => {
                     entries.push(BindGroupLayoutEntry {
                         binding: binding as u32,
@@ -98,16 +112,18 @@ pub fn create_bind_group_layout(
                         },
                         count: None,
                     });
-                },
+                }
             }
         }
 
-        let layout = render_device.create_bind_group_layout(
-            Some("compute_noise_bind_group_layout"),
+        let layout_descriptor = BindGroupLayoutDescriptor::new(
+            "compute_noise_bind_group_layout",
             &entries,
         );
 
-        pipeline.layouts.insert(sequence.key, layout);
-        pipeline.shaders.insert(sequence.key, sequence.shader.clone());
+        pipeline.layouts.insert(sequence.key, layout_descriptor);
+        pipeline
+            .shaders
+            .insert(sequence.key, sequence.shader.clone());
     }
 }

@@ -1,7 +1,15 @@
-#define_import_path bevy_compute_noise::perlin
+// #define_import_path bevy_compute_noise::perlin
 
-#import bevy_render::maths::PI
-#import bevy_compute_noise::util::{random_gradient_2d, random_gradient_3d, interpolate_quintic, interpolate_cubic}
+import bevy_render::maths::PI;
+import bevy_compute_noise::noise::shaders::util::{
+    random_gradient_2d,
+    random_gradient_3d,
+    interpolate_quintic,
+    interpolate_quintic_3d,
+    interpolate_cubic,
+    interpolate_cubic_3d
+};
+ 
 
 const TILEABLE: u32 = 1u;
 const REMAP: u32 = 2u;

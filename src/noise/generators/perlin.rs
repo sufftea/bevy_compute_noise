@@ -1,7 +1,16 @@
-use bevy::{asset::embedded_asset, prelude::*, render::{render_resource::{Buffer, BufferInitDescriptor, BufferUsages, ShaderDefVal, ShaderRef}, renderer::RenderDevice}};
+use bevy::{
+    asset::embedded_asset, prelude::*, render::{
+        render_resource::{Buffer, BufferInitDescriptor, BufferUsages},
+        renderer::RenderDevice,
+    }, shader::ShaderRef,
+};
 use bytemuck::{Pod, Zeroable};
 
-use crate::{noise::{ComputeNoise, ComputeNoiseType}, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
+use crate::{
+    noise::{ComputeNoise, ComputeNoiseType},
+    render::pipeline::NoiseOp,
+    shader::ComputeNoiseShader,
+};
 
 #[derive(Clone, Copy, Reflect, PartialEq, Debug, Pod, Zeroable)]
 #[reflect(Default)]
@@ -38,28 +47,26 @@ impl Default for Perlin {
 }
 
 impl ComputeNoise for Perlin {
-    const NOISE_OP: NoiseOp = NoiseOp::Generator; 
+    const NOISE_OP: NoiseOp = NoiseOp::Generator;
 
-    fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer> { 
+    fn create_buffer(&self, render_device: &RenderDevice) -> Vec<Buffer> {
         vec![
-            render_device.create_buffer_with_data(
-                &BufferInitDescriptor {
-                    label: Some("perlin2d_buffer"),
-                    contents: &bytemuck::cast_slice(&[self.clone()]),
-                    usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST
-                }
-            )
+            render_device.create_buffer_with_data(&BufferInitDescriptor {
+                label: Some("perlin2d_buffer"),
+                contents: &bytemuck::cast_slice(&[self.clone()]),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            }),
         ]
     }
 }
 
 impl ComputeNoiseType for Perlin {
     fn shader() -> ShaderRef {
-        "embedded://bevy_compute_noise/noise/generators/shaders/perlin.wgsl".into()
+        "embedded://bevy_compute_noise/noise/generators/shaders/perlin.wesl".into()
     }
 
     fn embed_shaders(app: &mut App) {
-        embedded_asset!(app, "shaders/perlin.wgsl");
+        embedded_asset!(app, "shaders/perlin.wesl");
     }
 }
 
@@ -72,10 +79,11 @@ impl ComputeNoiseShader for Perlin {
     }
 
     fn import_path() -> &'static str {
-        "bevy_compute_noise::perlin"
+        "bevy_compute_noise::noise::generators::shaders::perlin"
     }
 
     fn struct_name() -> Option<&'static str> {
         Some("Perlin")
     }
 }
+

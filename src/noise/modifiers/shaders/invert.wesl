@@ -1,4 +1,4 @@
-#define_import_path bevy_compute_noise::invert
+// #define_import_path bevy_compute_noise::invert
 
 // #ifdef 2D
 //     @group(0) @binding(0) var input_texture: texture_storage_2d<rgba8unorm, read_write>;

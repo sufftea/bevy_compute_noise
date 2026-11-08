@@ -1,4 +1,4 @@
-use bevy::{app::App, asset::embedded_asset, reflect::Reflect, render::{render_resource::{Buffer, ShaderRef}, renderer::RenderDevice}};
+use bevy::{app::App, asset::embedded_asset, reflect::Reflect, render::{render_resource::Buffer, renderer::RenderDevice}, shader::ShaderRef};
 use bytemuck::{Pod, Zeroable};
 
 use crate::{noise::{ComputeNoise, ComputeNoiseType}, render::pipeline::NoiseOp, shader::ComputeNoiseShader};
@@ -18,11 +18,11 @@ impl ComputeNoise for Invert {
 
 impl ComputeNoiseType for Invert {
     fn embed_shaders(app: &mut App) {     
-        embedded_asset!(app, "shaders/invert.wgsl");
+        embedded_asset!(app, "shaders/invert.wesl");
     }
 
     fn shader() -> ShaderRef {
-       "embedded://bevy_compute_noise/noise/modifiers/shaders/invert.wgsl".into() 
+       "embedded://bevy_compute_noise/noise/modifiers/shaders/invert.wesl".into() 
     }
 }
 
@@ -35,7 +35,7 @@ impl ComputeNoiseShader for Invert {
     }
 
     fn import_path() -> &'static str {
-        "bevy_compute_noise::invert"
+        "bevy_compute_noise::noise::modifiers::shaders::invert"
     }
 
     fn struct_name() -> Option<&'static str> {

@@ -1,10 +1,8 @@
-use bevy::{prelude::*, render::render_resource::{ShaderDefVal, ShaderRef}};
-
-pub mod worley;
-pub mod perlin;
 pub mod fbm;
+pub mod perlin;
+pub mod worley;
 
-use bytemuck::Pod;
-pub use worley::{Worley, WorleyFlags};
-pub use perlin::{Perlin, PerlinFlags};
 pub use fbm::Fbm;
+pub use perlin::{Perlin, PerlinFlags};
+pub use worley::{Worley, WorleyFlags};
+

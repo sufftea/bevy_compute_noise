@@ -1,6 +1,6 @@
-#define_import_path bevy_compute_noise::worley
+// #define_import_path bevy_compute_noise::worley
 
-#import bevy_compute_noise::util::{hash22, hash33, INFINITY}
+import bevy_compute_noise::noise::shaders::util::{hash22, hash33, INFINITY};
 
 const TILEABLE: u32 = 1u;
 

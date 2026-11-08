@@ -1,12 +1,23 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use bevy::{
-    prelude::*, render::{
-        render_resource::{binding_types::{uniform_buffer, uniform_buffer_sized}, BindGroup, BindGroupLayout, BindGroupLayoutEntries, Buffer, CachedComputePipelineId, DynamicBindGroupLayoutEntries, ShaderStages, TextureDimension}, renderer::RenderDevice,
-    }
+    prelude::*,
+    render::{
+        render_resource::{
+            binding_types::{uniform_buffer, uniform_buffer_sized},
+            BindGroup, BindGroupLayout, BindGroupLayoutEntries, Buffer, CachedComputePipelineId,
+            DynamicBindGroupLayoutEntries, ShaderStages, TextureDimension,
+        },
+        renderer::RenderDevice,
+    },
 };
 
-use crate::{image::ComputeNoiseSize, noise::{ComputeNoise, ErasedComputeNoise}, render::pipeline::{noise_texture_2d, ComputeNoisePipelineKey, NoiseOp}, shader::generate_noise_shader};
+use crate::{
+    image::ComputeNoiseSize,
+    noise::{ComputeNoise, ErasedComputeNoise},
+    render::pipeline::{noise_texture_2d, ComputeNoisePipelineKey, NoiseOp},
+    shader::generate_noise_shader,
+};
 
 pub(crate) struct ComputeNoiseInstruction {
     pub images: Vec<Handle<Image>>,
@@ -15,7 +26,7 @@ pub(crate) struct ComputeNoiseInstruction {
 }
 pub struct ComputeNoiseSequence {
     pub(crate) output: Handle<Image>,
-    pub(crate) instructions: Vec<ComputeNoiseInstruction>
+    pub(crate) instructions: Vec<ComputeNoiseInstruction>,
 }
 
 impl ComputeNoiseSequence {
@@ -31,7 +42,11 @@ impl ComputeNoiseSequence {
 pub enum QueueNoiseOp {
     Generate(ErasedComputeNoise),
     Modify(Option<Handle<Image>>, ErasedComputeNoise),
-    Combine(Option<Handle<Image>>, Option<Handle<Image>>, ErasedComputeNoise),
+    Combine(
+        Option<Handle<Image>>,
+        Option<Handle<Image>>,
+        ErasedComputeNoise,
+    ),
 }
 
 impl<T: ComputeNoise> From<T> for QueueNoiseOp {
@@ -67,7 +82,7 @@ impl IntoNoiseSequence for QueueNoiseOp {
                     noise,
                     op: NoiseOp::Modifier,
                 }
-            },
+            }
             QueueNoiseOp::Combine(input1, input2, noise) => {
                 let mut images = Vec::new();
                 if let Some(input1) = input1 {
@@ -81,11 +96,11 @@ impl IntoNoiseSequence for QueueNoiseOp {
                     noise,
                     op: NoiseOp::Combiner,
                 }
-            },
+            }
         };
         ComputeNoiseSequence {
             output,
-            instructions: vec![instruction]
+            instructions: vec![instruction],
         }
     }
 }
@@ -147,15 +162,25 @@ pub(crate) fn prepare_compute_noise_buffers(
 ) {
     for item in &noise_queue.queue {
         let sizes: Vec<ComputeNoiseSize> = std::iter::once(&item.output)
-            .chain(item.instructions.iter()
-                .flat_map(|instruction| instruction.images.iter())
+            .chain(
+                item.instructions
+                    .iter()
+                    .flat_map(|instruction| instruction.images.iter()),
             )
             .map(|image_handle| {
-                images.get(image_handle).unwrap().texture_descriptor.size.into()
+                images
+                    .get(image_handle)
+                    .unwrap()
+                    .texture_descriptor
+                    .size
+                    .into()
             })
             .collect();
 
-        if !sizes.windows(2).all(|window| TextureDimension::from(window[0]) == TextureDimension::from(window[1])) {
+        if !sizes
+            .windows(2)
+            .all(|window| TextureDimension::from(window[0]) == TextureDimension::from(window[1]))
+        {
             error!("Not all images have the same dimension - did not queue compute noise.");
             continue;
         }
@@ -167,25 +192,28 @@ pub(crate) fn prepare_compute_noise_buffers(
             },
             size: sizes[0],
             resources: std::iter::once(ComputeNoiseResource::Image(item.output.clone()))
-                .chain(item.instructions.iter()
-                    .flat_map(|instruction| {
-                        instruction.images.iter()
-                            .map(|image| ComputeNoiseResource::Image(image.clone()))
-                            .chain(instruction.noise.create_buffer(&render_device)
+                .chain(item.instructions.iter().flat_map(|instruction| {
+                    instruction
+                        .images
+                        .iter()
+                        .map(|image| ComputeNoiseResource::Image(image.clone()))
+                        .chain(
+                            instruction
+                                .noise
+                                .create_buffer(&render_device)
                                 .into_iter()
-                                .map(ComputeNoiseResource::Buffer))
+                                .map(ComputeNoiseResource::Buffer),
+                        )
                 }))
                 .collect(),
-            shader: shaders.add(
-                Shader::from_wgsl(
-                    generate_noise_shader(sizes[0].into(), item), 
-                    format!("compute_noise_{}.wgsl", item.key_id())
-                )
-            ),
+            shader: shaders.add(Shader::from_wesl(
+                generate_noise_shader(sizes[0].into(), item),
+                format!("compute_noise_{}.wesl", item.key_id()),
+            )),
         };
         noise_buffer_queue.queue.push(buffer);
     }
-    
+
     noise_queue.queue.clear();
 }
 

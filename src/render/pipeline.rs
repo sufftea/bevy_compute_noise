@@ -1,5 +1,19 @@
-
-use bevy::{prelude::*, render::{render_resource::{binding_types::{texture_storage_2d, uniform_buffer_sized}, BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntryBuilder, BindingType, ComputePipelineDescriptor, IntoBindGroupLayoutEntryBuilder, ShaderDefVal, ShaderRef, ShaderStages, SpecializedComputePipeline, StorageTextureAccess, TextureDimension, TextureFormat, TextureViewDimension}, renderer::RenderDevice}, utils::{hashbrown::HashSet, HashMap}};
+use bevy::{
+    material::descriptor::BindGroupLayoutDescriptor,
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+    render::{
+        render_resource::{
+            binding_types::{texture_storage_2d, uniform_buffer_sized},
+            BindGroupLayout, BindGroupLayoutEntries, BindGroupLayoutEntryBuilder, BindingType,
+            ComputePipelineDescriptor, IntoBindGroupLayoutEntryBuilder, ShaderStages,
+            SpecializedComputePipeline, StorageTextureAccess, TextureDimension, TextureFormat,
+            TextureViewDimension,
+        },
+        renderer::RenderDevice,
+    },
+    shader::ShaderRef,
+};
 
 use crate::noise::{generators::Fbm, ComputeNoiseType};
 
@@ -83,7 +97,7 @@ use crate::noise::{generators::Fbm, ComputeNoiseType};
 //         ShaderRef::Handle(handle) => Some(handle),
 //         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
 //     }.unwrap();
- 
+
 //     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
 //      pipeline.shaders.insert(
 //         ComputeNoisePipelineKey {
@@ -126,7 +140,8 @@ pub(crate) fn load_base_shader<T: ComputeNoiseType>(world: &mut World) {
         ShaderRef::Default => None,
         ShaderRef::Handle(handle) => Some(handle),
         ShaderRef::Path(path) => Some(world.resource::<AssetServer>().load(path)),
-    }.unwrap(); 
+    }
+    .unwrap();
 
     let mut pipeline = world.resource_mut::<ComputeNoisePipeline>();
     pipeline.base_shaders.insert(shader);
@@ -135,7 +150,7 @@ pub(crate) fn load_base_shader<T: ComputeNoiseType>(world: &mut World) {
 #[derive(Resource)]
 pub struct ComputeNoisePipeline {
     pub base_shaders: HashSet<Handle<Shader>>,
-    pub layouts: HashMap<ComputeNoisePipelineKey, BindGroupLayout>,
+    pub layouts: HashMap<ComputeNoisePipelineKey, BindGroupLayoutDescriptor>,
     pub shaders: HashMap<ComputeNoisePipelineKey, Handle<Shader>>,
     _util_shader: Handle<Shader>,
 }
@@ -146,13 +161,18 @@ impl FromWorld for ComputeNoisePipeline {
             base_shaders: HashSet::new(),
             layouts: HashMap::new(),
             shaders: HashMap::new(),
-            _util_shader: world.resource::<AssetServer>().load("embedded://bevy_compute_noise/noise/shaders/util.wgsl"),
+            _util_shader: world
+                .resource::<AssetServer>()
+                .load("embedded://bevy_compute_noise/noise/shaders/util.wesl"),
         }
     }
 }
 
 impl ComputeNoisePipeline {
-    pub fn get_layout(&self, key: ComputeNoisePipelineKey) -> &BindGroupLayout {
+    pub fn get_layout_descriptor(
+        &self,
+        key: ComputeNoisePipelineKey,
+    ) -> &BindGroupLayoutDescriptor {
         self.layouts.get(&key).unwrap()
     }
 }
@@ -167,16 +187,17 @@ impl SpecializedComputePipeline for ComputeNoisePipeline {
     type Key = ComputeNoisePipelineKey;
 
     fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
-        let layout = self.get_layout(key);
+        let layout_descriptor = self.get_layout_descriptor(key);
 
         ComputePipelineDescriptor {
             label: Some("compute_noise_pipeline".into()),
-            layout: vec![layout.clone()],
-            push_constant_ranges: Vec::new(),
+            layout: vec![layout_descriptor.clone()],
+            // push_constant_ranges: Vec::new(),
             shader: self.shaders.get(&key).unwrap().clone(),
             shader_defs: Vec::new(),
-            entry_point: "main".into(),
+            entry_point: Some("main".into()),
             zero_initialize_workgroup_memory: false,
+            ..Default::default()
         }
     }
 }
@@ -190,9 +211,9 @@ pub fn noise_texture_3d() -> BindGroupLayoutEntryBuilder {
         access: StorageTextureAccess::ReadWrite,
         format: TextureFormat::Rgba8Unorm,
         view_dimension: TextureViewDimension::D3,
-    }.into_bind_group_layout_entry_builder()
+    }
+    .into_bind_group_layout_entry_builder()
 }
-
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum NoiseOp {
@@ -200,3 +221,4 @@ pub enum NoiseOp {
     Modifier,
     Combiner,
 }
+
