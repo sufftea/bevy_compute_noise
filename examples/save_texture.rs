@@ -1,10 +1,24 @@
 use bevy::{
-    asset::saver::{SavedAsset, save_using_saver}, core_pipeline::tonemapping::Tonemapping, image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor, ImageSaver, ImageSaverSettings}, input::common_conditions::input_just_pressed, prelude::*, render::{mesh::VertexAttributeValues, render_resource::AsBindGroup}, shader::ShaderRef, sprite_render::{Material2d, Material2dPlugin}, tasks::IoTaskPool, window::PresentMode,
+    asset::{saver::save_using_saver, AssetPath, AsyncWriteExt},
+    core_pipeline::tonemapping::Tonemapping,
+    image::{
+        ImageAddressMode, ImageSampler, ImageSamplerDescriptor, ImageSaver, ImageSaverSettings,
+    },
+    input::common_conditions::input_just_pressed,
+    prelude::*,
+    render::{
+        gpu_readback::{ReadbackComplete, ReadbackOnce},
+        mesh::VertexAttributeValues,
+        render_resource::AsBindGroup,
+    },
+    shader::ShaderRef,
+    sprite_render::{Material2d, Material2dPlugin},
+    tasks::IoTaskPool,
+    window::PresentMode,
 };
 use bevy_compute_noise::prelude::*;
-// use ops::exp2;
 
-const ASSET_PATH: &str = "saved_texture.bin";
+const ASSET_PATH: &str = "saved_texture.png";
 
 fn main() {
     App::new()
@@ -20,6 +34,7 @@ fn main() {
             ComputeNoisePlugin,
         ))
         .add_systems(Startup, setup)
+        .add_systems(PreUpdate, run_noise.run_if(input_just_pressed(KeyCode::F4)))
         .add_systems(
             PreUpdate,
             perform_save.run_if(input_just_pressed(KeyCode::F5)),
@@ -64,18 +79,19 @@ fn setup(
     //     //Write(handle.clone(), Channel::R)
     // ));
 
-    noise_queue.queue(
-        handle.clone(),
-        (
-            Worley {
-                seed: 0,
-                frequency: 5.0,
-                flags: WorleyFlags::TILEABLE.bits(),
-            },
-            Invert,
-            // Store(Channel::R)
-        ),
-    );
+    // noise_queue.queue(
+    //     handle.clone(),
+    //     (
+    //         Worley {
+    //             seed: 0,
+    //             frequency: 5.0,
+    //             flags: WorleyFlags::TILEABLE.bits(),
+    //         },
+    //         Invert,
+    //         // Store(Channel::R)
+    //     ),
+    // );
+    commands.insert_resource(ResultTexture(handle.clone()));
 
     commands.spawn((
         Mesh2d(meshes.add(quad)),
@@ -88,27 +104,20 @@ fn setup(
     commands.spawn((Camera2d, Tonemapping::None));
 }
 
-// fn update_noise(
-//     mut noise_queue: ResMut<ComputeNoiseQueue>,
-//     query: Query<&MeshMaterial2d<ImageMaterial>>,
-//     keys: Res<ButtonInput<KeyCode>>,
-//     mut local: Local<u32>,
-//     materials: Res<Assets<ImageMaterial>>,
-// ) {
-//     if keys.just_pressed(KeyCode::Space) {
-//         for material in query.iter() {
-//             noise_queue.queue(
-//                 materials.get(&material.0).unwrap().image.clone(),
-//                 Worley {
-//                     seed: *local,
-//                     frequency: 5.0,
-//                     flags: WorleyFlags::TILEABLE.bits(),
-//                 }
-//             );
-//         }
-//         *local = *local + 1;
-//     }
-// }
+fn run_noise(result_texture: Res<ResultTexture>, mut noise_queue: ResMut<ComputeNoiseQueue>) {
+    noise_queue.queue(
+        result_texture.0.clone(),
+        (
+            Worley {
+                seed: 0,
+                frequency: 5.0,
+                flags: WorleyFlags::TILEABLE.bits(),
+            },
+            Invert,
+            // Store(Channel::R)
+        ),
+    );
+}
 
 #[derive(Asset, AsBindGroup, Debug, Clone, Reflect)]
 struct ImageMaterial {
@@ -124,31 +133,64 @@ impl Material2d for ImageMaterial {
 }
 
 #[derive(Resource)]
-struct ImageToSave(Handle<Image>);
+struct ResultTexture(Handle<Image>);
 
-fn perform_save(
-    image_to_save: Res<ImageToSave>,
-    images: Res<Assets<Image>>,
-    asset_server: Res<AssetServer>,
-) {
-    let image = images.get(&image_to_save.0).unwrap();
+fn perform_save(mut commands: Commands, image_to_save: Res<ResultTexture>) {
+    info!("Reading the image from the GPU");
 
-    let image = image.clone();
-    let asset_server = asset_server.clone();
-    IoTaskPool::get()
-        .spawn(async move {
-            match save_using_saver(
-                asset_server.clone(),
-                &ImageSaver,
-                &ASSET_PATH.into(),
-                SavedAsset::from_asset(&image),
-                &ImageSaverSettings::default(),
-            )
-            .await
-            {
-                Ok(()) => info!("Completed save of {ASSET_PATH}"),
-                Err(err) => error!("Failed to save asset: {err}"),
-            }
-        })
-        .detach();
+    commands
+        .spawn(ReadbackOnce::texture(image_to_save.0.clone()))
+        .observe(
+            |mut event: On<ReadbackComplete>, asset_server: Res<AssetServer>| {
+                info!("ReadbackOnce complete");
+
+                let _asset_server = asset_server.clone();
+                let data = std::mem::take(&mut event.data);
+                IoTaskPool::get()
+                    .spawn(async move {
+                        if let Err(err) = save_image(_asset_server, &data).await {
+                            error!("{}", err.to_string());
+                        };
+                        info!("Image saved");
+                    })
+                    .detach();
+
+                // IoTaskPool::get()
+                //     .spawn(async move {
+                //         match save_using_saver(
+                //             asset_server.clone(),
+                //             &ImageSaver,
+                //             &ASSET_PATH.into(),
+                //             SavedAsset::from_asset(&image),
+                //             &ImageSaverSettings::default(),
+                //         )
+                //         .await
+                //         {
+                //             Ok(()) => info!("Completed save of {ASSET_PATH}"),
+                //             Err(err) => error!("Failed to save asset: {err}"),
+                //         }
+                //     })
+                //     .detach();
+            },
+        );
+}
+
+async fn save_image(asset_server: AssetServer, bytes: &[u8]) -> Result<(), std::io::Error> {
+    // std::io::Error::new(kind, error)
+
+    let path = AssetPath::from(ASSET_PATH);
+    let source = asset_server
+        .get_source(path.source())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "TODO"))?;
+    let writer = source
+        .writer()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Unsupported, "TODO"))?;
+
+    let mut file_writer = writer.write(path.path()).await.map_err(|err| match err {
+        bevy::asset::io::AssetWriterError::Io(error) => error,
+    })?;
+
+    file_writer.write_all(bytes).await?;
+
+    Ok(())
 }

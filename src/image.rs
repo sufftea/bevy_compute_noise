@@ -1,17 +1,20 @@
-use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages}};
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
+};
 
 pub struct ComputeNoiseImage;
 
 impl ComputeNoiseImage {
     pub fn create_image(size: ComputeNoiseSize) -> Image {
-        let mut image =
-            Image::new_fill(
-                size.into(),
-                size.into(),
-                &[0, 0, 0, 0],
-                TextureFormat::Rgba8Unorm,
-                RenderAssetUsages::all(),
-            );
+        let mut image = Image::new_fill(
+            size.into(),
+            size.into(),
+            &[0, 255, 0, 255],
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::all(),
+        );
 
         image.texture_descriptor.usage = TextureUsages::COPY_DST
             | TextureUsages::COPY_SRC
@@ -53,7 +56,7 @@ impl ComputeNoiseSize {
     pub fn data_len(&self) -> usize {
         match self {
             Self::D2(width, height) => (width * height) as usize,
-            Self::D3(width, height, depth) => (width * height * depth) as usize, 
+            Self::D3(width, height, depth) => (width * height * depth) as usize,
         }
     }
 
@@ -68,20 +71,16 @@ impl ComputeNoiseSize {
 impl From<ComputeNoiseSize> for Extent3d {
     fn from(value: ComputeNoiseSize) -> Self {
         match value {
-            ComputeNoiseSize::D2(width, height) => {
-                Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                }
+            ComputeNoiseSize::D2(width, height) => Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
             },
-            ComputeNoiseSize::D3(width, height, depth) => {
-                Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: depth,
-                }
-            }
+            ComputeNoiseSize::D3(width, height, depth) => Extent3d {
+                width,
+                height,
+                depth_or_array_layers: depth,
+            },
         }
     }
 }

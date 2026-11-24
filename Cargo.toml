@@ -35,7 +35,9 @@ bevy = { version = "0.20.1", default-features = false, features = [
     "zstd_rust",
     "bevy_log",
     "bevy_sprite_render",
+    "png",
 ] }
+# image = "0.25.10"
 
 [profile.dev]
 opt-level = 1

@@ -119,7 +119,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {{
             self.add_instruction(instruction);
         }
 
-        self.shader.push_str("    textureStore(output_texture, coords, vec4<f32>(value, 0.0, 0.0, 0.0));\n}");
+        self.shader.push_str("    textureStore(output_texture, coords, vec4<f32>(value, 0.0, 0.0, 1.0));\n}");
         self
     }
 
